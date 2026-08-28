@@ -1,0 +1,33 @@
+name: Study Type July Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run-study-type-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          pip install pandas requests
+
+      - name: Run Study Type July report
+        env:
+          ASANA_TOKEN: ${{ secrets.ASANA_TOKEN }}
+        run: |
+          python study_type_july_2026.py
+
+      - name: Upload July Study Type CSV
+        uses: actions/upload-artifact@v4
+        with:
+          name: study-type-july-2026
+          path: study_type_july_2026.csv
