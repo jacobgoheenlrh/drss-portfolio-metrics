@@ -12,18 +12,30 @@ OUTPUT_FILE = "study_type_july_2026.csv"
 
 FIELDS = {
     "study_type": "1211983136110071",
+    "study_phase": "1211936368728422",
     "origination_date": "1213592016704745",
     "irb_submission_date": "1213780659973512",
     "irb_approval_date": "1213779721785821",
     "analysis_queue_date": "1216982897744923",
     "time_in_analysis": "1216993820576120",
-    "completion_date": "1215452557663133",
+    "time_to_completion": "1216053587547367",
 }
 
 STUDY_TYPES = {
     "Prospective": "1211983136110072",
     "Retrospective": "1211983136110073",
     "Retrospective - NHSR": "1217153608253349",
+}
+
+ACTIVE_PHASE_GIDS = {
+    "1211936368728423",  # Discovery Phase
+    "1211936368728424",  # Pre-IRB Design Phase
+    "1211936368728425",  # IRB Approval Pending
+    "1211936368728426",  # IRB Revisions/Amendment
+    "1211936368728427",  # Data Collection - Analytics/Informatics
+    "1211936368728428",  # Data Collection - Manual Chart Review
+    "1212459094249319",  # Data Collection - Prospective
+    "1211936368728429",  # Analysis Phase
 }
 
 COLUMNS = [
@@ -85,14 +97,23 @@ def collect_projects():
     for project in raw_projects:
         fields = {f["gid"]: f for f in project.get("custom_fields", [])}
         study_type_value = fields.get(FIELDS["study_type"], {}).get("enum_value")
+        study_phase_value = fields.get(FIELDS["study_phase"], {}).get("enum_value")
         projects.append({
             "study_type_gid": study_type_value.get("gid") if study_type_value else None,
+            "study_phase_gid": study_phase_value.get("gid") if study_phase_value else None,
+
             "origination": extract_date(fields.get(FIELDS["origination_date"])),
             "irb_submission": extract_date(fields.get(FIELDS["irb_submission_date"])),
             "irb_approval": extract_date(fields.get(FIELDS["irb_approval_date"])),
             "analysis_queue": extract_date(fields.get(FIELDS["analysis_queue_date"])),
-            "time_in_analysis": fields.get(FIELDS["time_in_analysis"], {}).get("number_value"),
-            "completion": extract_date(fields.get(FIELDS["completion_date"])),
+
+            "time_in_analysis": fields.get(
+                FIELDS["time_in_analysis"], {}
+            ).get("number_value"),
+
+            "time_to_completion": fields.get(
+                FIELDS["time_to_completion"], {}
+            ).get("number_value"),
         })
     return projects
 
@@ -104,14 +125,26 @@ def generate_report(projects):
     }
 
     for study_type, items in grouped.items():
-        report[f"{study_type} Project Count"] = len(items)
+
+        active_items = [
+            p for p in items
+            if p["study_phase_gid"] in ACTIVE_PHASE_GIDS
+        ]
+
+        report[f"{study_type} Project Count"] = len(active_items)
 
     metrics = [
         ("Average Days to IRB Submission", lambda p: days_between(p["origination"], p["irb_submission"])),
         ("Average Days to IRB Approval", lambda p: days_between(p["origination"], p["irb_approval"])),
         ("Average Days to Analysis", lambda p: days_between(p["origination"], p["analysis_queue"])),
         ("Average Days in Analysis", lambda p: p["time_in_analysis"] / 1440 if p["time_in_analysis"] is not None and p["time_in_analysis"] > 0 else None),
-        ("Average Days to Completion", lambda p: days_between(p["origination"], p["completion"])),
+        (
+            "Average Days to Completion",
+            lambda p:
+                p["time_to_completion"] / 1440
+                if p["time_to_completion"] is not None
+                else None
+        ),
     ]
 
     for metric_name, calculation in metrics:
